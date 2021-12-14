@@ -48,6 +48,18 @@ def dStepSize(no_str):
     else:
          return 0
 
+#функция определяет находится ли бар внутри пасти аллигатора
+def is_Candles_Far_from_Alligator(high, low, jaw, tooth, lip):
+    
+    min_alligator_value = min(jaw, tooth, lip)
+    max_alligator_value = max(jaw, tooth, lip)
+    
+    if ((low > max_alligator_value and high > max_alligator_value)  or
+        (high < min_alligator_value and low < min_alligator_value)):
+        return True
+    else:    
+        return False
+
 print("Получаем параметры валютной пары...")
 exchangeInfo = requests.get("https://www.binance.com/api/v3/exchangeInfo").json()
 
@@ -90,6 +102,7 @@ def on_message(ws, message):
         is_this_kline_closed = trade['k']['x']
 
     if is_this_kline_closed:
+        time.sleep(1)
         jsonKlines = requests.get("https://api.binance.com/api/v3/klines?symbol=" + trade_symbol + "&interval=" + bar_interval + "&limit=102").json()
         dfKlines = pd.DataFrame(jsonKlines, columns=['open_time','open','high','low','close','volume','close_time','quote_volume','trades','buy_asset_volume','buy_quote_volume','ignore'])
         dfKlines = dfKlines.astype(float)
@@ -119,9 +132,9 @@ def on_message(ws, message):
         alligator_eat_up = True if smma5.iloc[-2] > smma8.iloc[-2] and smma5.iloc[-2] > smma13.iloc[-2] and smma8.iloc[-2] > smma13.iloc[-2] else False
         alligator_eat_down = True if smma5.iloc[-2] < smma8.iloc[-2] and smma5.iloc[-2] < smma13.iloc[-2] and smma8.iloc[-2] < smma13.iloc[-2] else False
 
-        bar_in_alligator = ((smma5.iloc[-2] <= dfKlines.high.iloc[-2] and smma5.iloc[-2] >= dfKlines.low.iloc[-2]) or
-                            (smma8.iloc[-2] <= dfKlines.high.iloc[-2] and smma8.iloc[-2] >= dfKlines.low.iloc[-2]) or
-                            (smma13.iloc[-2] <= dfKlines.high.iloc[-2] and smma13.iloc[-2] >= dfKlines.low.iloc[-2]))
+        bar_far_from_alligator = is_Candles_Far_from_Alligator(dfKlines.high.iloc[-2],dfKlines.low.iloc[-2],smma13.iloc[-2],smma8.iloc[-2],smma5.iloc[-2])
+        
+        print(dfKlines.low.iloc[-3] > dfKlines.low.iloc[-2],close_in_interval,ao.iloc[-3] > ao.iloc[-2],ao.iloc[-2] < 0,bull_bar_dist > alligator_dist,alligator_eat_down,bar_far_from_alligator)
 
         if (dfKlines.low.iloc[-3] > dfKlines.low.iloc[-2] and
             close_in_interval == 1 and
@@ -129,7 +142,7 @@ def on_message(ws, message):
             ao.iloc[-2] < 0 and
             bull_bar_dist > alligator_dist and
             alligator_eat_down and
-            not bar_in_alligator):
+            bar_far_from_alligator):
 
                 print("Выполнилось условие на покупку!")
                 timestamp = requests.get("https://api.binance.com/api/v3/time").json()
@@ -141,10 +154,10 @@ def on_message(ws, message):
                 if r.status_code == 200:
                     data = r.json()
                     price_buy_long = float(data["fills"][0]["price"])
-                    trade_time = datetime.datetime.utcfromtimestamp(trade_time_tick/1000).replace(tzinfo=datetime.timezone.utc).astimezone(tz=None).strftime('%d.%m.%Y %H:%M:%S')
+                    trade_time = datetime.datetime.utcfromtimestamp(timestamp/1000).replace(tzinfo=datetime.timezone.utc).astimezone(tz=None).strftime('%d.%m.%Y %H:%M:%S')
                     print(trade_time,price_buy_long,"BUY_LONG")
 
-                    limit_sell_price = price_buy_long + price_buy_long * 0.01
+                    limit_sell_price = price_buy_long + price_buy_long * 0.007
 
                     timestamp = requests.get("https://api.binance.com/api/v3/time").json()
                     params = {'symbol': trade_symbol,'side': 'SELL','type': 'LIMIT','timeInForce': 'GTC','quantity': trade_quantity, 'price': round(limit_sell_price,tickSize),'recvWindow': 5000,'timestamp': timestamp['serverTime']}
