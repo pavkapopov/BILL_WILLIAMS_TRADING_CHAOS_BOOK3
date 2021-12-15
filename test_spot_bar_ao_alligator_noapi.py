@@ -154,7 +154,7 @@ def on_message(ws, message):
                 if r.status_code == 200:
                     data = r.json()
                     price_buy_long = float(data["fills"][0]["price"])
-                    trade_time = datetime.datetime.utcfromtimestamp(timestamp/1000).replace(tzinfo=datetime.timezone.utc).astimezone(tz=None).strftime('%d.%m.%Y %H:%M:%S')
+                    trade_time = datetime.datetime.utcfromtimestamp(timestamp['serverTime']/1000).replace(tzinfo=datetime.timezone.utc).astimezone(tz=None).strftime('%d.%m.%Y %H:%M:%S')
                     print(trade_time,price_buy_long,"BUY_LONG")
 
                     limit_sell_price = price_buy_long + price_buy_long * 0.007
