@@ -4,14 +4,13 @@ import datetime
 import pandas as pd
 import numpy as np
 import mplfinance as mpf
-import math
 
 # 1m 3m 5m 15m 30m 1h 2h 4h 6h 8h 12h 1d 3d 1w 1M
 
 #symbols=['BTCUSDT','ETHUSDT','LTCUSDT','XRPUSDT','SOLUSDT','ADAUSDT','BNBUSDT','EOSUSDT','NEOUSDT']
 
-def sma20_crossing_bar(high,low,sma20):
-    if sma20 < high and sma20 >low:
+def sma_crossing_bar(high,low,sma):
+    if sma < high and sma >low:
         return True
     else:
         return False
@@ -53,13 +52,11 @@ for symbol in symbols:
     #Ищем бычий и медвежий отклоняющийся бар и фракталы
     index = 0
     while index < len(dfKlines.index):
-        if sma20_crossing_bar(dfKlines.high[index],dfKlines.low[index],sma20[index]):
-            value_sma20_crossing_bar = sma20[index]
 
         #определяем "тип" бара
         if index >= 0 and index <= 1:
-            bull_bar[index] = np.nan
-            bear_bar[index] = np.nan
+            bull_bar[index] = dfKlines.low[index]*0.999
+            bear_bar[index] = dfKlines.high[index]*1.0
 
         if index > 1:
             interval = (dfKlines.high[index] - dfKlines.low[index]) / 2
@@ -71,33 +68,19 @@ for symbol in symbols:
             if dfKlines.close[index] > dfKlines.low[index] and dfKlines.low[index] + interval > dfKlines.close[index] or dfKlines.close[index] == dfKlines.low[index]:
                 close_in_interval = 3
 
-            #dist1 = abs((dfKlines.high[index]+dfKlines.low[index])/2 - smma13[index])
-            #dist2 = abs((dfKlines.high[index-10]+dfKlines.low[index-10])/2 - smma13[index-10])
-
             alligator_dist = abs(smma13[index]-smma5[index])
-            #bull_bar_dist = ((dfKlines.high[index] + dfKlines.low[index])/2) - smma5[index] 
             bull_bar_dist = abs(dfKlines.high[index]-smma5[index])
-            #bear_bar_dist = ((dfKlines.high[index] + dfKlines.low[index])/2) - smma5[index] 
             bear_bar_dist = abs(dfKlines.low[index]-smma5[index])
+
             alligator_eat_up = True if smma5[index] > smma8[index] and smma5[index] > smma13[index] and smma8[index] > smma13[index] else False
             alligator_eat_down = True if smma5[index] < smma8[index] and smma5[index] < smma13[index] and smma8[index] < smma13[index] else False
 
-            if dfKlines.low[index - 1] > dfKlines.low[index] and close_in_interval == 1 and ao[index-1] > ao[index] and ao[index] < 0 and bull_bar_dist > alligator_dist and alligator_eat_down:
-                a=abs(value_sma20_crossing_bar-sma20[index])
-                b=abs(value_sma20_crossing_bar-dfAveragePrice[index])
-                c=abs(dfKlines.high[index]-sma20[index])
-                print(math.degrees((a**2+b**2-c**2)/(2*a*b)),"bull_bar")
-                #print(value_sma20_crossing_bar,sma20[index],dfAveragePrice[index])
+            if dfKlines.low[index - 1] > dfKlines.low[index] and close_in_interval == 1 and ao[index-1] > ao[index] and ao[index] < 0 and bull_bar_dist > alligator_dist and alligator_eat_down and sma_crossing_bar(dfKlines.high[index],dfKlines.low[index],bb_low[index]):
                 bull_bar[index] = dfKlines.low[index]*0.999
             else:
                 bull_bar[index] = np.nan
 
-            if dfKlines.high[index] > dfKlines.high[index - 1] and  close_in_interval == 3 and ao[index] > ao[index-1] and ao[index] > 0 and bear_bar_dist > alligator_dist and alligator_eat_up:
-                a=abs(value_sma20_crossing_bar-sma20[index])
-                b=abs(value_sma20_crossing_bar-dfAveragePrice[index])
-                c=abs(dfKlines.low[index]-sma20[index])
-                print(math.degrees((a**2+b**2-c**2)/(2*a*b)), "bear_bar")
-                #print(value_sma20_crossing_bar,sma20[index],dfAveragePrice[index])
+            if dfKlines.high[index] > dfKlines.high[index - 1] and  close_in_interval == 3 and ao[index] > ao[index-1] and ao[index] > 0 and bear_bar_dist > alligator_dist and alligator_eat_up and sma_crossing_bar(dfKlines.high[index],dfKlines.low[index],bb_up[index]):
                 bear_bar[index] = dfKlines.high[index]*1.0
             else:
                 bear_bar[index] = np.nan
