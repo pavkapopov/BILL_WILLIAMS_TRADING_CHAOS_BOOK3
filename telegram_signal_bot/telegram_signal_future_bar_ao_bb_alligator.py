@@ -109,7 +109,7 @@ def on_message(ws, message):
             bb_low_crossing_bar):
 
                 print(trade_symbol,"Выполнилось условие на покупку LONG!")
-                send_telegram(trade_symbol +" LONG TP 2%")
+                send_telegram(trade_symbol + " ВХОД: " + dfKlines.close.iloc[-2] + " LONG TP 2%")
 
 
         if (dfKlines.high.iloc[-2] > dfKlines.high.iloc[-3] and
@@ -122,7 +122,7 @@ def on_message(ws, message):
             bb_up_crossing_bar):
 
                 print(trade_symbol, "Выполнилось условие на покупку SHORT!")
-                send_telegram(trade_symbol + " SHORT TP 2%")
+                send_telegram(trade_symbol + " ВХОД: " + dfKlines.close.iloc[-2] + " SHORT TP 2%")
 
 
 def on_error(ws, error):
