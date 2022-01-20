@@ -129,7 +129,7 @@ def on_message(ws, message):
     if is_this_kline_closed:
         time.sleep(1) # Т.к. сообщения о закрытой свече могут прийти несколько раз подряд, делаем паузу (плохое решение нужно исправить)
         # получаем последние свечи для расчёта стратегии
-        jsonKlines = requests.get("https://fapi.binance.com/fapi/v1/klines?symbol=" + trade_symbol + "&interval=" + bar_interval + "&limit=102").json()
+        jsonKlines = requests.get("https://api.binance.com/api/v3/klines?symbol=" + trade_symbol + "&interval=" + bar_interval + "&limit=102").json()
         dfKlines = pd.DataFrame(jsonKlines, columns=['open_time','open','high','low','close','volume','close_time','quote_volume','trades','buy_asset_volume','buy_quote_volume','ignore'])
         dfKlines = dfKlines.astype(float)
         # вычисляем среднюю цену баров
