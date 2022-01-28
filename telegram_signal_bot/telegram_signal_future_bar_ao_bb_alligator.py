@@ -8,7 +8,7 @@ import websocket
 import pandas as pd
 
 
-trade_symbol = "BTCUSDT" #торговая пара
+trade_symbol = "ADAUSDT" #торговая пара
 trade_symbol_low = trade_symbol.lower() #торговая пара в нижнем регистре для передечи в websocket
 bar_interval = "5m" #таймфрейм бара для анализа
 
@@ -35,7 +35,7 @@ def is_Candles_Far_from_Alligator(high, low, jaw, tooth, lip):
 def send_telegram(text: str):
     token = ""
     url = "https://api.telegram.org/bot"
-    channel_id = "@trading_chaos_bw"
+    channel_id = ""
     url += token
     method = url + "/sendMessage"
 
@@ -44,6 +44,22 @@ def send_telegram(text: str):
     if r.status_code != 200:
         print (r.status_code)
         raise Exception("post_text error")
+
+#определяем глобальный тренд
+global_jsonKlines = requests.get("https://fapi.binance.com/fapi/v1/klines?symbol=" + trade_symbol + "&interval=1d&limit=102").json()
+global_dfKlines = pd.DataFrame(global_jsonKlines, columns=['open_time','open','high','low','close','volume','close_time','quote_volume','trades','buy_asset_volume','buy_quote_volume','ignore'])
+global_dfKlines = global_dfKlines.astype(float)
+# вычисляем среднюю цену баров
+global_dfAveragePrice = (global_dfKlines.high + global_dfKlines.low)/2
+# вычисляем аллигатора
+global_smma13 = global_dfAveragePrice.ewm(alpha=1/13, adjust=False).mean().shift(8) # зубы
+global_smma8 = global_dfAveragePrice.ewm(alpha=1/8, adjust=False).mean().shift(5) # челюсть
+global_smma5 = global_dfAveragePrice.ewm(alpha=1/5, adjust=False).mean().shift(3) # губы
+
+global_alligator_eat_up = True if global_smma5.iloc[-1] > global_smma8.iloc[-1] and global_smma5.iloc[-1] > global_smma13.iloc[-1] and global_smma8.iloc[-1] > global_smma13.iloc[-1] else False
+global_alligator_eat_down = True if global_smma5.iloc[-1] < global_smma8.iloc[-1] and global_smma5.iloc[-1] < global_smma13.iloc[-1] and global_smma8.iloc[-1] < global_smma13.iloc[-1] else False
+
+print(trade_symbol,"Глобальный тренд ТФ 1Д UP: ",global_alligator_eat_up," DOWN: ",global_alligator_eat_down)
 
 # основная функция, вызывается каждый раз когда в сокет приходит сообщение
 def on_message(ws, message):
@@ -55,7 +71,7 @@ def on_message(ws, message):
 
     if is_this_kline_closed:
 
-        time.sleep(1)
+        time.sleep(0.5)
         # получаем последние свечи для расчёта стратегии
         jsonKlines = requests.get("https://fapi.binance.com/fapi/v1/klines?symbol=" + trade_symbol + "&interval=" + bar_interval + "&limit=102").json()
         dfKlines = pd.DataFrame(jsonKlines, columns=['open_time','open','high','low','close','volume','close_time','quote_volume','trades','buy_asset_volume','buy_quote_volume','ignore'])
@@ -70,7 +86,9 @@ def on_message(ws, message):
         sma5 = dfAveragePrice.rolling(window=5).mean()
         sma34 = dfAveragePrice.rolling(window=34).mean()
         ao = sma5 - sma34
-        # определяем является ли бар дивергентным 
+
+        close_in_interval = 0 # иногда определение интервала не срабатывает. Чтобы небыло ошибки неизвестной переменной
+        # определяем является ли бар дивергентным
         interval = (dfKlines.high.iloc[-2] - dfKlines.low.iloc[-2]) / 2
 
         if dfKlines.high.iloc[-2] > dfKlines.close.iloc[-2] and dfKlines.close.iloc[-2] > dfKlines.high.iloc[-2] - interval or dfKlines.high.iloc[-2] == dfKlines.close.iloc[-2]:
@@ -106,10 +124,11 @@ def on_message(ws, message):
             bull_bar_dist > alligator_dist and
             alligator_eat_down and
             bar_far_from_alligator and
-            bb_low_crossing_bar):
+            bb_low_crossing_bar and
+            global_alligator_eat_up):
 
                 print(trade_symbol,"Выполнилось условие на покупку LONG!")
-                send_telegram(trade_symbol + " ВХОД: " + str(dfKlines.close.iloc[-2]) + " LONG TP 2%")
+                send_telegram(trade_symbol + " ВХОД: " + str(dfKlines.close.iloc[-2]) + " LONG TP 2% / SL 2%")
 
 
         if (dfKlines.high.iloc[-2] > dfKlines.high.iloc[-3] and
@@ -119,10 +138,11 @@ def on_message(ws, message):
             bear_bar_dist > alligator_dist and
             alligator_eat_up and
             bar_far_from_alligator and
-            bb_up_crossing_bar):
+            bb_up_crossing_bar and
+            global_alligator_eat_down):
 
                 print(trade_symbol, "Выполнилось условие на покупку SHORT!")
-                send_telegram(trade_symbol + " ВХОД: " + str(dfKlines.close.iloc[-2]) + " SHORT TP 2%")
+                send_telegram(trade_symbol + " ВХОД: " + str(dfKlines.close.iloc[-2]) + " SHORT TP 2% / SL 2%")
 
 
 def on_error(ws, error):
@@ -141,7 +161,7 @@ def on_open(ws):
 
 #if __name__ == "__main__":
 def binance_socket():
-    ws = websocket.WebSocketApp("wss://stream.binance.com:9443/ws/" + trade_symbol_low + "@kline_" + bar_interval,
+    ws = websocket.WebSocketApp("wss://fstream.binance.com/ws/" + trade_symbol_low + "@kline_" + bar_interval,
                                 on_message = on_message,
                                 on_error = on_error,
                                 on_close = on_close)
