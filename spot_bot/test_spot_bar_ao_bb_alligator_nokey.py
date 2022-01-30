@@ -128,6 +128,19 @@ def on_message(ws, message):
 
     if is_this_kline_closed:
         time.sleep(1) # Т.к. сообщения о закрытой свече могут прийти несколько раз подряд, делаем паузу (плохое решение нужно исправить)
+        #получаем свечи для определения глобального тренда тф 1д, торгуем только тогда когда рынок идёт вверх (нужно попробовать разные индикаторы тренда)
+        jsonKlines_1d = requests.get("https://api.binance.com/api/v3/klines?symbol=" + trade_symbol + "&interval=1d&limit=102").json()
+        dfKlines_1d = pd.DataFrame(jsonKlines_1d, columns=['open_time','open','high','low','close','volume','close_time','quote_volume','trades','buy_asset_volume','buy_quote_volume','ignore'])
+        dfKlines_1d = dfKlines_1d.astype(float)
+        # вычисляем среднюю цену баров
+        dfAveragePrice_1d = (dfKlines_1d.high + dfKlines_1d.low)/2
+        # вычисляем аллигатора
+        smma13_1d = dfAveragePrice_1d.ewm(alpha=1/13, adjust=False).mean().shift(8) # зубы
+        smma8_1d = dfAveragePrice_1d.ewm(alpha=1/8, adjust=False).mean().shift(5) # челюсть
+        smma5_1d = dfAveragePrice_1d.ewm(alpha=1/5, adjust=False).mean().shift(3) # губы
+        # определяем бычий тренд
+        alligator_eat_up_1d = True if smma5_1d.iloc[-2] > smma8_1d.iloc[-2] and smma5_1d.iloc[-2] > smma13_1d.iloc[-2] and smma8_1d.iloc[-2] > smma13_1d.iloc[-2] else False      
+        
         # получаем последние свечи для расчёта стратегии
         jsonKlines = requests.get("https://api.binance.com/api/v3/klines?symbol=" + trade_symbol + "&interval=" + bar_interval + "&limit=102").json()
         dfKlines = pd.DataFrame(jsonKlines, columns=['open_time','open','high','low','close','volume','close_time','quote_volume','trades','buy_asset_volume','buy_quote_volume','ignore'])
@@ -173,14 +186,15 @@ def on_message(ws, message):
         bb_up_crossing_bar = sma_crossing_bar(dfKlines.high.iloc[-2],dfKlines.low.iloc[-2],bb_up.iloc[-2])
 
         # условие на покупку в лонг
-        if (dfKlines.low.iloc[-3] > dfKlines.low.iloc[-2] and
-            close_in_interval == 1 and
-            ao.iloc[-3] > ao.iloc[-2] and
-            ao.iloc[-2] < 0 and
-            bull_bar_dist > alligator_dist and
-            alligator_eat_down and
-            bar_far_from_alligator and
-            bb_low_crossing_bar):
+        if (dfKlines.low.iloc[-3] > dfKlines.low.iloc[-2]
+            and close_in_interval == 1
+            and ao.iloc[-3] > ao.iloc[-2]
+            and ao.iloc[-2] < 0
+            and bull_bar_dist > alligator_dist
+            and alligator_eat_down
+            and bar_far_from_alligator
+            and bb_low_crossing_bar
+            and alligator_eat_up_1d):
 
                 timestamp = requests.get("https://api.binance.com/api/v3/time").json()
                 params = {'symbol': trade_symbol,'side': 'BUY','type': 'MARKET','quantity': trade_quantity,'recvWindow': 5000,'timestamp': timestamp['serverTime']}
